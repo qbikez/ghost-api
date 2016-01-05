@@ -4,7 +4,7 @@
  * Dependencies
  */
 
-var prependHttp = require('prepend-http');
+//var prependHttp = require('prepend-http');
 var stringify = require('querystring').stringify;
 var Promise = require('pinkie-promise');
 var assign = require('object-assign');
@@ -12,6 +12,23 @@ var format = require('util').format;
 var got = require('got');
 
 var json = JSON.stringify;
+
+
+function prependHttp (url, secure) {
+	if (typeof url !== 'string') {
+		throw new TypeError('Expected a string');
+	}
+
+	url = url.trim();
+
+	if (/^\.*\//.test(url)) {
+		return url;
+	}
+    if (/^localhost/.test(url)) {
+        secure = false;
+    }
+	return url.replace(/^(?!(?:\w+:)?\/\/)/, secure ? 'https://' : 'http://');
+};
 
 
 /**
@@ -28,7 +45,7 @@ module.exports = Client;
 function Client (endpoint) {
   if (!(this instanceof Client)) return new Client(endpoint);
 
-  this.endpoint = prependHttp(endpoint) + '/ghost/api/v0.1';
+  this.endpoint = prependHttp(endpoint, true) + '/ghost/api/v0.1';
 
   bindAll(this, ['posts']);
 }
@@ -54,10 +71,17 @@ Client.prototype.options = function (options) {
  * Authenticate via OAuth
  */
 
-Client.prototype.auth = function (email, password) {
+Client.prototype.auth = function (email, password, client_id, client_secret) {
   var url = this.endpoint + '/authentication/token';
 
   var self = this;
+  
+  if (!client_id || !client_secret) {
+    // TODO: parse host and client secret from repo path 
+  // or get ghost-admin client_secret from /ghost meta tags
+        client_id = "ghost-admin";
+        client_secret = "59a57ba8d150";
+  }
 
   return req(url, {
     method: 'post',
@@ -65,8 +89,8 @@ Client.prototype.auth = function (email, password) {
       username: email,
       password: password,
       grant_type: 'password',
-      client_id: 'ghost-admin',
-      client_secret: '6e5816927c41'
+      client_id: client_id,
+      client_secret: client_secret
     }
   }).then(function (res) {
     self.token = JSON.parse(res.body).access_token;
